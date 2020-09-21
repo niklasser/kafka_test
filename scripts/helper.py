@@ -9,7 +9,7 @@ group.add_argument("-add", help="Adds topic. Takes <name> <partitions> <replicat
 group.add_argument("-delete", help="Deletes topic. Takes <Topic name>")
 args = parser.parse_args()
 
-host = 'localhost:9092'
+host = 'localhost:19092'
 if args.host:
     host = args.host
 

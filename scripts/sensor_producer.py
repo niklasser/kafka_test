@@ -3,7 +3,7 @@ from kafka.errors import KafkaError
 import numpy.random as np
 import time
 import json
-producer = KafkaProducer(bootstrap_servers=['localhost:9092'], value_serializer=lambda v: json.dumps(v).encode('utf-8'))
+producer = KafkaProducer(bootstrap_servers=['localhost:19092'], value_serializer=lambda v: json.dumps(v).encode('utf-8'))
 
 #Sending random sensor data
 while True:

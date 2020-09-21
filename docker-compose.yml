@@ -1,22 +1,93 @@
-version: "3"
+version: '2.1'
+networks: 
+  rmoff_kafka:
+    name: rmoff_kafka
 services:
-  zookeeper:
-    image: 'bitnami/zookeeper:latest'
+  zoo1:
+    image: zookeeper:3.4.9
+    hostname: zoo1
     ports:
-      - '2181:2181'
+      - "2181:2181"
     environment:
-      - ALLOW_ANONYMOUS_LOGIN=yes
-  kafka:
-    image: 'bitnami/kafka:latest'
-    ports:
-      - '9092:9092'
-    environment:
-      - KAFKA_BROKER_ID=1
-      - KAFKA_LISTENERS=PLAINTEXT://:9092
-      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://127.0.0.1:9092
-      - KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181
-      - ALLOW_PLAINTEXT_LISTENER=yes
-    depends_on:
-      - zookeeper
+        ZOO_MY_ID: 1
+        ZOO_PORT: 2181
+        ZOO_SERVERS: server.1=zoo1:2888:3888
     volumes:
-      - ./.kafka:/bitnami/kafka
+      - ./.zoo/data:/data
+      - ./.zoo/datalog:/datalog
+    networks: 
+      - rmoff_kafka
+  kafka1:
+    image: confluentinc/cp-kafka:5.5.1
+    hostname: kafka1
+    ports:
+      - "19092:19092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zoo1:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka1:9092,CONNECTIONS_FROM_HOST://localhost:19092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONNECTIONS_FROM_HOST:PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    volumes:
+      - ./.kafka/data:/var/lib/kafka/data
+    depends_on:
+      - zoo1
+    networks: 
+      - rmoff_kafka
+  schema-registry:
+    image: confluentinc/cp-schema-registry:4.1.1
+    hostname: schema-registry
+    ports:
+    - "38081:38081"
+    depends_on:
+    - kafka1
+    environment:
+      SCHEMA_REGISTRY_KAFKASTORE_CONNECTION_URL: zoo1:2181
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_LISTENERS: http://schema-registry:38081
+      SCHEMA_REGISTRY_DEBUG: "true"
+    networks: 
+      - rmoff_kafka
+  kafka-rest:
+    image: confluentinc/cp-kafka-rest:4.1.1
+    hostname: kafka-rest
+    ports:
+    - "38082:38082"
+    environment:
+      KAFKA_REST_ZOOKEEPER_CONNECT: zoo1:2181
+      KAFKA_REST_SCHEMA_REGISTRY_URL: schema-registry:38081
+      KAFKA_REST_HOST_NAME: kafka-rest
+      KAFKA_REST_LISTENERS: http://kafka-rest:38082,http://localhost:38082
+    depends_on:
+      - schema-registry
+    networks: 
+      - rmoff_kafka      
+  mlservice:
+    build: mlservice/
+    depends_on:
+      - kafka1
+    environment: 
+      - kafkainstance=kafka1
+      - kafkaport=9092
+      - subtopic=sensordata
+      - resulttopic=mlresult
+    networks: 
+      - rmoff_kafka
+  frostservice:
+    build: frostservice/
+    depends_on:
+      - kafka1
+    environment: 
+      - kafkainstance=kafka1
+      - kafkaport=9092
+      - subtopic=sensordata
+    networks: 
+      - rmoff_kafka
+  apigateway:
+    image: 'devopsfaith/krakend'
+    ports:
+      - '8080:8080'
+    volumes:
+      - ./apigateway:/etc/krakend/
+    networks: 
+      - rmoff_kafka
